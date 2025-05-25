@@ -1,61 +1,47 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash
 import sqlite3
-import os
+from flask import Flask, render_template, request, redirect, session
 
 app = Flask(__name__)
-app.secret_key = 'clave_secreta_segura'
+app.secret_key = 'tu_clave_secreta_aqui'  # Necesario para sessions
 
-DB_NAME = 'users.db'
-
+# Función para inicializar la base de datos
 def init_db():
-    if not os.path.exists(DB_NAME):
-        with sqlite3.connect(DB_NAME) as conn:
-            conn.execute("""CREATE TABLE users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT NOT NULL UNIQUE,
-                password TEXT NOT NULL
-            )""")
-            print("Base de datos creada.")
+    conn = sqlite3.connect('database.db')
+    cursor = conn.cursor()
+    
+    # Crear tabla users si no existe
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL
+    )
+    ''')
+    
+    conn.commit()
+    conn.close()
 
-@app.route('/')
-def index():
-    if 'user' in session:
-        return render_template('home.html', username=session['user'])
-    return redirect(url_for('login'))
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        with sqlite3.connect(DB_NAME) as conn:
-            user = conn.execute('SELECT * FROM users WHERE username = ? AND password = ?', (username, password)).fetchone()
-            if user:
-                session['user'] = username
-                return redirect(url_for('index'))
-            else:
-                flash('Usuario o contraseña incorrectos')
-    return render_template('login.html')
+# Llamar a init_db al iniciar la aplicación
+init_db()
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
+        
+        conn = sqlite3.connect('database.db')
+        cursor = conn.cursor()
+        
         try:
-            with sqlite3.connect(DB_NAME) as conn:
-                conn.execute('INSERT INTO users (username, password) VALUES (?, ?)', (username, password))
-                flash('Registro exitoso. Inicia sesión.')
-                return redirect(url_for('login'))
+            cursor.execute('INSERT INTO users (username, password) VALUES (?, ?)', (username, password))
+            conn.commit()
+            return redirect('/')
         except sqlite3.IntegrityError:
-            flash('El nombre de usuario ya existe.')
+            return "El usuario ya existe"
+        finally:
+            conn.close()
+    
     return render_template('register.html')
 
-@app.route('/logout')
-def logout():
-    session.pop('user', None)
-    return redirect(url_for('login'))
-
-if __name__ == '__main__':
-    init_db()
-    app.run(debug=True)
+# Resto de tu aplicación...
